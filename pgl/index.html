@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PGA 一键购买</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
+    <style>
+        body{background:#000;color:#0f0;font-family:Consolas,monospace;padding:20px;line-height:1.6;}
+        input,button{background:#111;color:#0f0;border:1px solid #0f0;padding:14px;width:100%;margin:12px 0;font-size:16px;box-sizing:border-box;}
+        button{cursor:pointer;}
+        button:hover{background:#003300;}
+        button:disabled{opacity:0.4;cursor:not-allowed;}
+        .c{max-width:520px;margin:0 auto;}
+        .success{color:#00ff00;}
+        .error{color:#ff0000;}
+        small{color:#666;font-size:13px;}
+    </style>
+</head>
+<body>
+<div class="c">
+    <h1>PGA 一键购买工具</h1>
+    <small>PGP Chain • Chain ID: 860621 • 滑点 5%</small><br><br>
+
+    <button id="connectBtn">连接钱包 (MetaMask)</button>
+
+    <div id="accountInfo" style="display:none;word-break:break-all;margin:15px 0;">
+        已连接：<span id="address"></span>
+    </div>
+
+    <input type="text" id="token" placeholder="目标代币地址（例: 0x1369a5f999618607bB0bb92892Ef69e2233F88f8）">
+
+    <input type="text" id="amount" placeholder="购买金额（PGA）" value="1">
+
+    <button id="buyBtn" disabled>一键购买</button>
+
+    <div id="status" style="margin-top:20px;min-height:50px;"></div>
+</div>
+
+<script>
+    const CONTRACT = "0xc571eBf5c6A5AC3ff28097D1170f78CE11793cf5";
+    const ABI = [{"inputs":[{"internalType":"address","name":"token","type":"address"}],"name":"buy","outputs":[],"stateMutability":"payable","type":"function"}];
+
+    let web3, account, contract;
+
+    const status = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const buyBtn = document.getElementById('buyBtn');
+
+    async function switchToPGP() {
+        try {
+            await ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: '0xD3E5D' }], // 860621
+            });
+        } catch (e) {
+            if (e.code === 4902 || e.code === -32603) {
+                await ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                        chainId: '0xD3E5D',
+                        chainName: 'PGP Chain',
+                        rpcUrls: ['https://pgpnode.pgachain.org'],
+                        nativeCurrency: { name: 'PGA', symbol: 'PGA', decimals: 18 },
+                        blockExplorerUrls: ['https://pgp.elastos.io']
+                    }]
+                });
+            }
+        }
+    }
+
+    connectBtn.onclick = async () => {
+        if (!window.ethereum) return status.innerHTML = '<span class="error">请安装 MetaMask</span>';
+
+        await switchToPGP();
+        try {
+            await ethereum.request({ method: 'eth_requestAccounts' });
+            web3 = new Web3(ethereum);
+            const accounts = await web3.eth.getAccounts();
+            account = accounts[0];
+
+            contract = new web3.eth.Contract(ABI, CONTRACT);
+
+            document.getElementById('address').textContent = account;
+            document.getElementById('accountInfo').style.display = 'block';
+            connectBtn.textContent = '已连接';
+            connectBtn.disabled = true;
+            buyBtn.disabled = false;
+            status.innerHTML = '<span class="success">连接成功，可购买</span>';
+        } catch (e) {
+            status.innerHTML = '<span class="error">连接失败</span>';
+        }
+    };
+
+    buyBtn.onclick = async () => {
+        const token = document.getElementById('token').value.trim();
+        const amount = document.getElementById('amount').value.trim();
+
+        if (!web3.utils.isAddress(token)) return status.innerHTML = '<span class="error">代币地址错误</span>';
+        if (!amount || isNaN(amount) || Number(amount) <= 0) return status.innerHTML = '<span class="error">金额错误</span>';
+
+        const value = web3.utils.toWei(amount, 'ether');
+        buyBtn.textContent = '购买中...';
+        buyBtn.disabled = true;
+        status.textContent = '等待确认...';
+
+        try {
+            const tx = await contract.methods.buy(token).send({
+                from: account,
+                value: value
+            });
+            status.innerHTML = `<span class="success">购买成功！<br>Tx: ${tx.transactionHash}</span>`;
+        } catch (e) {
+            status.innerHTML = `<span class="error">${e.message.includes('User denied') ? '用户取消交易' : '购买失败：' + e.message}</span>`;
+        } finally {
+            buyBtn.textContent = '一键购买';
+            buyBtn.disabled = false;
+        }
+    };
+</script>
+</body>
+</html>
