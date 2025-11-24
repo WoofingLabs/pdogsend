@@ -55,7 +55,7 @@ function loop(){
     if(!running) return;
     
     // 关键1：每次 new 一个 Web3 实例，彻底绕过浏览器缓存和节流
-    const tempWeb3 = new Web3("https://rpc.pgachain.org");
+    const tempWeb3 = new Web3("https://pgpnode.pgachain.org");
     const tempFactory = new tempWeb3.eth.Contract(pairABI, FACTORY);
     const tempToken = new tempWeb3.eth.Contract(balABI, WPGA);
 
@@ -92,7 +92,7 @@ async function snipe(){
     const pk = document.getElementById('pk').value.trim();
     if(!pk.startsWith('0x')) return log("私钥错误");
     
-    const w3 = new Web3("https://rpc.pgachain.org");
+    const w3 = new Web3("https://pgpnode.pgachain.org");
     const acc = w3.eth.accounts.privateKeyToAccount(pk);
     w3.eth.accounts.wallet.add(acc);
     
