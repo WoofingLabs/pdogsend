@@ -1,138 +1,149 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<title>WPGA 1秒真·本地必跑版（已绕过所有浏览器限制）</title>
+<meta charset="UTF-8">
+<title>WPGA 1秒狙击器 - GitHub Pages 专用版</title>
 <style>
     body{background:#000;color:#0f0;font-family:consolas;margin:0;padding:20px;}
-    input,button{width:100%;padding:15px;margin:10px 0;background:#111;border:1px solid #0f0;border-radius:8px;color:#0f0;font-size:18px;}
-    button{background:#0f0;color:#000;font-weight:bold;cursor:pointer;}
-    #s{color:#0f0;font-size:26px;text-align:center;margin:20px 0;animation:f 0.8s infinite;}
-    #log{height:340px;overflow:auto;background:#000;padding:10px;border:1px solid #0f0;border-radius:8px;font-size:14px;}
-    @keyframes f{0%,100%{opacity:1}50%{opacity:0.3}}
+    .box{max-width:560px;margin:20px auto;background:#111;padding:30px;border-radius:15px;border:2px solid #0f0;box-shadow:0 0 20px #0f0;}
+    h1{text-align:center;margin-bottom:20px;}
+    input{width:100%;padding:15px;margin:10px 0;background:#000;border:1px solid #0f0;border-radius:8px;color:#0f0;font-size:18px;}
+    button{width:100%;padding:18px;margin:15px 0;background:#0f0;color:#000;border:none;border-radius:10px;font-size:20px;font-weight:bold;cursor:pointer;}
+    button:hover{background:#0c0;}
+    button#stop{background:#f00;display:none;}
+    #status{text-align:center;font-size:28px;margin:20px 0;animation:glow 0.8s infinite;}
+    #log{height:360px;overflow:auto;background:#000;padding:15px;border:1px solid #0f0;border-radius:8px;font-size:15px;line-height:1.6;}
+    @keyframes glow{0%,100%{opacity:1;text-shadow:0 0 20px #0f0}50%{opacity:0.6;text-shadow:0 0 5px #0f0}}
 </style>
 </head>
 <body>
-<h1 style="text-align:center">WPGA 1秒本地必跑终极版</h1>
-<input type="password" id="pk" placeholder="私钥（带0x）">
-<input type="text" id="gp" placeholder="Gas Price Gwei（留空自动）">
-<input type="text" id="gl" value="10000000" placeholder="Gas Limit">
-<button id="start">点我 → 1秒狂刷启动</button>
-<button id="stop" style="display:none;background:#f00;">停止</button>
-<div id="s">等待你点启动...</div>
-<div id="log"></div>
+<div class="box">
+    <h1>WPGA 1秒狙击器<br><small>GitHub Pages 专用·永不卡死</small></h1>
+    
+    <input type="password" id="pk" placeholder="私钥（带0x）" autocomplete="off">
+    <input type="text" id="gp" placeholder="Gas Price（Gwei，留空自动，建议28-50）">
+    <input type="text" id="gl" value="10000000" placeholder="Gas Limit">
+    
+    <button id="start">启动 1秒狂暴监控</button>
+    <button id="stop">停止监控</button>
+    
+    <div id="status">等待启动...</div>
+    <div id="log"></div>
+</div>
 
-<!-- 关键：换成公共高可用RPC + 强制不缓存 -->
 <script src="https://unpkg.com/web3@1.8.2/dist/web3.min.js"></script>
 <script>
-// 换成最稳最快的公共节点（官方节点经常被限流）
-const web3 = new Web3("https://pgpnode.pgachain.org");   // 这条最快最稳！
+// 严格使用你指定的官方节点
+const RPC = "https://pgpnode.pgachain.org";
+const web3 = new Web3(RPC);
 
-const WPGA = "0x1369a5f999618607bB0bb92892Ef69e2233F88f8";
-const TARGET = "0xC1A34Cca87f79125718714C56e8Ee59EAA195FEE";
-const FACTORY = "0x0f7AEBDA3E4b70493Bc7b10E77299E4A0eF8681";
-const BUY_CONTRACT = "0x165BD68cB3027Ca8fc0F5302cA427192121049aB";
+const WPGA      = "0x1369a5f999618607bB0bb92892Ef69e2233F88f8";
+const TARGET    = "0xC1A34Cca87f79125718714C56e8Ee59EAA195FEE";
+const FACTORY   = "0x0f7AEBDA3E4b70493Bc7b10E77299E4A0eF8681";
+const BUY_CONTRACT = "0x165BD68cB3027Ca8fc0F5302cA427192121049aB";  // 你的合约已写死
 
 let running = false;
-let checkCount = 0;
+let count = 0;
 
-// 最小ABI
-const pairABI = [{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"address","name":"","type":"address"}],"name":"getPair","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}];
-const balABI = [{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}];
+const factory = new web3.eth.Contract([{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"address","name":"","type":"address"}],"name":"getPair","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}], FACTORY);
+const token   = new web3.eth.Contract([{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}], WPGA);
 
-const factory = new web3.eth.Contract(pairABI, FACTORY);
-const token = new web3.eth.Contract(balABI, WPGA);
-
-function log(m){ 
-    checkCount++;
-    const t = new Date().toLocaleTimeString().slice(0,-3);
-    document.getElementById('log').innerHTML += `<div>${t} | ${checkCount}次 | ${m}</div>`;
+function log(msg){
+    count++;
+    const t = new Date().toLocaleTimeString();
+    document.getElementById('log').innerHTML += `<div>${t} | 第${count}次 | ${msg}</div>`;
     document.getElementById('log').scrollTop = 1e9;
 }
 
-// 核心：用最原始的闭包递归 + 强制不缓存
-function loop(){
+async function check(){
     if(!running) return;
-    
-    // 关键1：每次 new 一个 Web3 实例，彻底绕过浏览器缓存和节流
-    const tempWeb3 = new Web3("https://pgpnode.pgachain.org");
-    const tempFactory = new tempWeb3.eth.Contract(pairABI, FACTORY);
-    const tempToken = new tempWeb3.eth.Contract(balABI, WPGA);
 
-    tempFactory.methods.getPair(WPGA, TARGET).call()
-    .then(pair => {
+    try{
+        const pair = await factory.methods.getPair(WPGA, TARGET).call();
         if(pair === "0x0000000000000000000000000000000000000000"){
-            document.getElementById('s').textContent = "1秒狂刷中... 未加池";
-            log("未加池");
-        } else {
-            return tempToken.methods.balanceOf(pair).call().then(b => {
-                const amt = Number(tempWeb3.utils.fromWei(b,'ether')).toFixed(3);
-                document.getElementById('s').textContent = `池子 ${amt} WPGA`;
-                log(`池子 ${amt} WPGA`);
-                if(Number(amt) >= 10000){
-                    running = false;
-                    document.getElementById('s').textContent = "触发！正在全仓买入...";
-                    log("池子≥10000 WPGA 立即全仓狙击！");
-                    document.getElementById('start').style.display = "block";
-                    document.getElementById('stop').style.display = "none";
-                    snipe();
-                    return;
-                }
-            });
+            document.getElementById('status').textContent = "1秒狂刷中... 未加池";
+            log("未检测到交易对");
+        }else{
+            const bal = await token.methods.balanceOf(pair).call();
+            const amt = Number(web3.utils.fromWei(bal, 'ether')).toFixed(3);
+            document.getElementById('status').textContent = `池子 ${amt} WPGA`;
+            log(`当前池子 ${amt} WPGA`);
+
+            if(Number(amt) >= 10000){
+                log("触发条件！池子 ≥ 10000 WPGA，立即全仓买入！");
+                document.getElementById('status').textContent = "正在全仓打币...";
+                running = false;
+                document.getElementById('start').style.display = "block";
+                document.getElementById('stop').style.display = "none";
+                await snipe();
+                return;
+            }
         }
-    })
-    .catch(() => log("节点稍卡，继续狂刷"))
-    .finally(() => {
-        if(running) setTimeout(loop, 1000);  // 关键2：每次都是全新的 setTimeout
-    });
+    }catch(e){
+        document.getElementById('status').textContent = "节点稍卡，继续1秒狂刷";
+        log("请求异常：" + e.message.slice(0,50));
+    }
+
+    setTimeout(check, 1000);   // 1秒真轮询
 }
 
+// 全仓狙击（保留0.5 PGA）
 async function snipe(){
-    // 狙击部分保持不变
     const pk = document.getElementById('pk').value.trim();
-    if(!pk.startsWith('0x')) return log("私钥错误");
-    
-    const w3 = new Web3("https://pgpnode.pgachain.org");
-    const acc = w3.eth.accounts.privateKeyToAccount(pk);
-    w3.eth.accounts.wallet.add(acc);
-    
-    const bal = await w3.eth.getBalance(acc.address);
-    const send = (BigInt(bal) - 500000000000000000n).toString(); // 留0.5
-    
-    let gp = await w3.eth.getGasPrice();
-    if(document.getElementById('gp').value) gp = w3.utils.toWei(document.getElementById('gp').value,'gwei');
-    
+    if(!pk.startsWith('0x')) return log("私钥格式错误");
+
+    const w3 = new Web3(RPC);
+    const account = w3.eth.accounts.privateKeyToAccount(pk);
+    w3.eth.accounts.wallet.add(account);
+
     try{
+        const balance = await w3.eth.getBalance(account.address);
+        const sendValue = (BigInt(balance) - BigInt(w3.utils.toWei("0.5", "ether"))).toString();
+
+        let gasPrice = await w3.eth.getGasPrice();
+        if(document.getElementById('gp').value.trim()){
+            gasPrice = w3.utils.toWei(document.getElementById('gp').value.trim(), 'gwei');
+        }
+
+        log(`全仓打出 ${w3.utils.fromWei(sendValue, 'ether')} PGA（已留0.5 Gas）`);
+
         const tx = await w3.eth.accounts.signTransaction({
+            from: account.address,
             to: BUY_CONTRACT,
-            value: send,
+            value: sendValue,
             gas: Number(document.getElementById('gl').value),
-            gasPrice: gp
+            gasPrice: gasPrice
         }, pk);
-        const r = await w3.eth.sendSignedTransaction(tx.rawTransaction);
-        log("狙击成功！！！交易已发出");
-        log("https://pgp.elastos.io/tx/"+r.transactionHash);
-        document.getElementById('s').textContent = "狙击成功！";
-    }catch(e){
-        log("狙击失败："+e.message.slice(0,80));
+
+        const receipt = await w3.eth.sendSignedTransaction(tx.rawTransaction);
+        log("狙击成功！！！");
+        log(`交易哈希：https://pgp.elastos.io/tx/${receipt.transactionHash}`);
+        document.getElementById('status').textContent = "狙击成功！大肉到手！";
+    }catch(err){
+        log("狙击失败：" + err.message);
+        document.getElementById('status').textContent = "狙击失败，查看日志";
     }
 }
 
 document.getElementById('start').onclick = () => {
-    if(!document.getElementById('pk').value.trim()){ alert("填私钥！"); return; }
+    if(!document.getElementById('pk').value.trim()){
+        alert("请先填写私钥！");
+        return;
+    }
     running = true;
     document.getElementById('start').style.display = "none";
     document.getElementById('stop').style.display = "block";
-    document.getElementById('s').textContent = "1秒狂刷启动！";
-    log("=== 1秒狂刷正式启动 ===");
-    loop();
+    document.getElementById('status').textContent = "1秒狂暴监控已启动！";
+    log("=== WPGA 1秒狙击器启动 ===");
+    check();
 };
 
 document.getElementById('stop').onclick = () => {
     running = false;
     document.getElementById('start').style.display = "block";
     document.getElementById('stop').style.display = "none";
-    document.getElementById('s').textContent = "已停止";
+    document.getElementById('status').textContent = "监控已停止";
+    log("监控已手动停止");
 };
 </script>
 </body>
