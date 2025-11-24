@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WPGA 监控狙击器 - 自动打 PGA</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00ff41;
+            --danger: #ff0062;
+            --bg: #1e1e2f;
+            --card: #2c2f48;
+            --input: #373b5c;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Poppins',sans-serif; background:var(--bg); color:white; padding:20px; min-height:100vh; display:flex; justify-content:center; align-items:center; }
+        .container { max-width:500px; width:100%; background:var(--card); border-radius:15px; padding:25px; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
+        .header { background:linear-gradient(90deg,#00cc33,var(--primary)); padding:16px; border-radius:15px; text-align:center; font-size:1.5em; font-weight:600; margin-bottom:20px; color:black; }
+        .input-box { background:var(--input); padding:15px; border-radius:12px; margin-bottom:15px; }
+        label { display:block; margin-bottom:8px; font-size:0.95em; }
+        input, textarea { width:100%; padding:12px; background:#444; border:none; border-radius:10px; color:white; font-family:monospace; }
+        button { padding:14px; background:var(--primary); color:black; border:none; border-radius:12px; cursor:pointer; font-weight:bold; width:100%; margin:10px 0; font-size:1.1em; }
+        button:hover { background:#00cc33; }
+        button:disabled { background:#555; cursor:not-allowed; }
+        .status { padding:12px; border-radius:10px; text-align:center; margin:15px 0; font-size:1em; }
+        .ok { background:#004400; color:#00ff41; }
+        .warn { background:#443300; color:#ffdd00; }
+        .error { background:#440000; color:#ff0062; }
+        .log { background:#000; color:#00ff41; padding:10px; border-radius:8px; height:150px; overflow-y:auto; font-family:monospace; font-size:0.85em; margin-top:10px; }
+        .spinner { display:inline-block; width:16px; height:16px; border:2px solid #fff; border-top:2px solid var(--primary); border-radius:50%; animation:spin 1s linear infinite; margin-left:8px; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">WPGA 自动狙击器</div>
+
+    <div class="input-box">
+        <label>私钥（带 0x，前缀必须有）</label>
+        <input type="password" id="privateKey" placeholder="0xabc123...">
+    </div>
+
+    <div class="input-box">
+        <label>你要打的 PGA 数量（主网币）</label>
+        <input type="text" id="buyAmount" value="5" placeholder="例如：5">
+    </div>
+
+    <div class="input-box">
+        <label>你的 PGABuy 合约地址（已部署好的）</label>
+        <input type="text" id="buyContract" placeholder="0x...">
+    </div>
+
+    <button id="startBtn">启动监控</button>
+    <button id="stopBtn" style="display:none;background:#ff0062;">停止监控</button>
+
+    <div id="status" class="status warn">请填写信息后点击【启动监控】</div>
+    <div id="log" class="log"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
+<script>
+    const TARGET_TOKEN = "0xC1A34Cca87f79125718714C56e8Ee59EAA195FEE"; // 要买的代币
+    const WPGA = "0x1369a5f999618607bB0bb92892Ef69e2233F88f8";        // WPGA 代币地址
+    const ROUTER = "0x3F67bDFB5003723e70bf18C7F6239814a2437bA8";
+    const FACTORY = "0x0f7AEBDA3E4b70493Bc7b10E77299E4A0eF8681";
+    const RPC = "https://pgpnode.pgachain.org";
+    
+    const web3 = new Web3(RPC);
+    let monitoring = false;
+    let intervalId = null;
+
+    const factoryAbi = [{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"address","name":"","type":"address"}],"name":"getPair","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}];
+    const erc20Abi = [{"inputs":[{"internalType":"address","name":"account","type":"address"}],"name":"balanceOf","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}];
+
+    const factory = new web3.eth.Contract(factoryAbi, FACTORY);
+
+    function log(msg) {
+        const logDiv = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        logDiv.innerHTML += `<div>[${time}] ${msg}</div>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    async function checkAndSnipe() {
+        try {
+            const pair = await factory.methods.getPair(WPGA, TARGET_TOKEN).call();
+            if (pair === "0x0000000000000000000000000000000000000000") {
+                document.getElementById('status').textContent = "未创建交易对，等待加池...";
+                document.getElementById('status').className = "status warn";
+                return;
+            }
+
+            const wpgaContract = new web3.eth.Contract(erc20Abi, WPGA);
+            const wpgaInPair = await wpgaContract.methods.balanceOf(pair).call();
+            const wpgaAmount = Number(web3.utils.fromWei(wpgaInPair, 'ether'));
+
+            document.getElementById('status').textContent = `池子已有 ${wpgaAmount.toFixed(2)} WPGA`;
+            
+            if (wpgaAmount >= 10000) {
+                log(`触发条件！池子 WPGA ≥ 10000，当前 ${wpgaAmount.toFixed(2)}，准备狙击！`);
+                document.getElementById('status').textContent = "条件达成！正在打币...";
+                document.getElementById('status').className = "status ok";
+                clearInterval(intervalId);
+                document.getElementById('startBtn').style.display = "block";
+                document.getElementById('stopBtn').style.display = "none";
+                await snipeNow();
+            }
+        } catch (e) {
+            console.error(e);
+            log("检查出错：" + e.message);
+        }
+    }
+
+    async function snipeNow() {
+        const pk = document.getElementById('privateKey').value.trim();
+        const amountStr = document.getElementById('buyAmount').value.trim();
+        const buyContract = document.getElementById('buyContract').value.trim();
+
+        if (!pk.startsWith('0x') || pk.length !== 64 + 2) return log("私钥格式错误！");
+        if (!amountStr || isNaN(amountStr) || Number(amountStr) <= 0) return log("金额错误！");
+        if (!web3.utils.isAddress(buyContract)) return log("合约地址错误！");
+
+        const account = web3.eth.accounts.privateKeyToAccount(pk);
+        web3.eth.accounts.wallet.add(account);
+
+        const amountWei = web3.utils.toWei(amountStr, 'ether');
+
+        try {
+            log(`正在向合约 ${buyContract} 转 ${amountStr} PGA...`);
+            const tx = {
+                from: account.address,
+                to: buyContract,
+                value: amountWei,
+                gas: 100000,
+                gasPrice: await web3.eth.getGasPrice()
+            };
+
+            const signed = await web3.eth.accounts.signTransaction(tx, pk);
+            const receipt = await web3.eth.sendSignedTransaction(signed.rawTransaction);
+
+            log(`成功打出 ${amountStr} PGA！交易哈希：`);
+            log(`https://pgp.elastos.io/tx/${receipt.transactionHash}`);
+            document.getElementById('status').textContent = "狙击成功！已自动购买";
+            document.getElementById('status').className = "status ok";
+        } catch (err) {
+            log("狙击失败：" + err.message);
+            document.getElementById('status').textContent = "狙击失败，请查看日志";
+            document.getElementById('status').className = "status error";
+        }
+    }
+
+    document.getElementById('startBtn').onclick = () => {
+        const pk = document.getElementById('privateKey').value.trim();
+        const amount = document.getElementById('buyAmount').value.trim();
+        const contract = document.getElementById('buyContract').value.trim();
+
+        if (!pk || !amount || !contract) {
+            log("请先填写完整信息！");
+            return;
+        }
+        if (!pk.startsWith('0x')) {
+            log("私钥必须带 0x 前缀！");
+            return;
+        }
+
+        monitoring = true;
+        document.getElementById('startBtn').style.display = "none";
+        document.getElementById('stopBtn').style.display = "block";
+        document.getElementById('status').textContent = "监控已启动，每6秒检查一次池子...";
+        document.getElementById('status').className = "status ok";
+        log("监控启动，目标：WPGA ≥ 10000 立即开狙");
+
+        intervalId = setInterval(checkAndSnipe, 6000);
+        checkAndSnipe(); // 立刻检查一次
+    };
+
+    document.getElementById('stopBtn').onclick = () => {
+        clearInterval(intervalId);
+        monitoring = false;
+        document.getElementById('startBtn').style.display = "block";
+        document.getElementById('stopBtn').style.display = "none";
+        document.getElementById('status').textContent = "监控已停止";
+        document.getElementById('status').className = "status warn";
+        log("监控已手动停止");
+    };
+</script>
+</body>
+</html>
