@@ -1,178 +1,261 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PGA 一键购买工具</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Changa+One&display=swap" rel="stylesheet" />
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#00ff41',
-                        dark: '#070808',
-                        'light-gray': '#E5E7EB'
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        display: ['Changa One', 'system-ui', 'sans-serif']
-                    }
-                }
-            }
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #00ff41;
+            --secondary-color: #00cc33;
+            --gradient-bg: linear-gradient(180deg, #1e1e2f 0%, #2a2a3d 100%);
+            --card-bg: #2c2f48;
+            --input-bg: #373b5c;
+            --text-color: #ffffff;
+            --border-radius: 15px;
         }
-    </script>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--gradient-bg);
+            color: var(--text-color);
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 480px;
+            background: var(--card-bg);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border-radius: var(--border-radius);
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(90deg, var(--secondary-color), var(--primary-color));
+            padding: 12px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            font-size: 1.4em;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 14px;
+            background: var(--primary-color);
+            color: black;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            transition: background 0.2s;
+            margin-bottom: 12px;
+            font-size: 1em;
+        }
+        button:hover:not(:disabled) { background: #00cc33; }
+        button:disabled { background: #444; cursor: not-allowed; }
+        .input-box {
+            background: var(--input-bg);
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-bottom: 15px;
+        }
+        label { display: block; margin-bottom: 8px; font-size: 0.95em; }
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #444;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1em;
+        }
+        .status {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: var(--primary-color);
+            text-align: center;
+        }
+        .balance-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            font-size: 0.9em;
+            color: #00ff41;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px; height: 16px;
+            border: 2px solid #fff;
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
 </head>
-<body class="bg-dark text-white font-sans overflow-x-hidden min-h-screen">
+<body>
+    <div class="container">
+        <div class="header">PGA 一键购买工具</div>
 
-    <section class="min-h-screen pt-24 pb-16 flex items-center justify-center px-4">
-        <div class="container mx-auto max-w-md">
-            <div class="text-center mb-10">
-                <h1 class="font-display text-5xl text-primary">PGA 一键购买</h1>
-                <p class="text-light-gray mt-3 text-lg">用 PGA 直接购买任意代币 · 滑点 5%</p>
-            </div>
-
-            <div class="bg-dark/50 p-7 rounded-2xl border border-primary/30 space-y-6">
-
-                <button id="connectWalletButton" class="w-full py-4 bg-primary text-black rounded-full font-bold text-lg hover:bg-primary/80 transition-all">
-                    连接钱包
-                </button>
-
-                <div id="userInfo" class="hidden space-y-4 text-sm">
-                    <div class="flex justify-between"><span class="text-light-gray">钱包地址:</span> <span id="address" class="font-mono">未连接</span></div>
-                    <div class="flex justify-between"><span class="text-light-gray">PGA 余额:</span> <span id="balance">0</span></div>
-                    <button id="allBtn" class="w-full py-2 bg-white/10 rounded-lg hover:bg-white/20 transition">全部购买（保留 0.1 PGA 给 Gas）</button>
-                </div>
-
-                <div>
-                    <label class="block text-left text-light-gray mb-2">目标代币地址</label>
-                    <input id="token" type="text" placeholder="0x..." class="w-full px-4 py-3 bg-dark/80 border border-primary/20 rounded-lg text-white focus:outline-none focus:border-primary" />
-                </div>
-
-                <div>
-                    <label class="block text-left text-light-gray mb-2">购买金额（PGA）</label>
-                    <input id="amount" type="text" placeholder="例如: 10" class="w-full px-4 py-3 bg-dark/80 border border-primary/20 rounded-lg text-white focus:outline-none focus:border-primary" />
-                </div>
-
-                <button id="buyButton" class="w-full py-4 bg-primary text-black rounded-full font-bold text-lg hover:bg-primary/80 transition-all disabled:bg-gray-700 disabled:cursor-not-allowed" disabled>
-                    一键购买
-                </button>
-
-                <p id="status" class="text-light-gray text-center text-sm min-h-6">请先连接钱包</p>
-            </div>
-
-            <div class="mt-8 text-center text-xs text-light-gray">
-                合约地址: <span class="font-mono">0xc571eBf5...93cf5</span><br>
-                路由: <span class="font-mono">0x3F67bDFB...7bA8</span>
-            </div>
+        <div class="connect-section">
+            <button id="connectWalletButton">连接钱包</button>
+            <div id="networkStatus" class="status">点击连接钱包...</div>
         </div>
-    </section>
+
+        <div id="mainSection" style="display:none;">
+            <div class="balance-row">
+                <span>PGA 余额</span>
+                <span id="pgaBalance">0 PGA</span>
+            </div>
+
+            <div class="input-box">
+                <label>目标代币地址</label>
+                <input type="text" id="tokenAddress" placeholder="例如: 0x1369a5f999618607bB0bb92892Ef69e2233F88f8">
+            </div>
+
+            <div class="input-box">
+                <label>购买金额（PGA）</label>
+                <input type="text" id="amount" placeholder="输入数量或点下方全部按钮">
+            </div>
+
+            <button id="allBtn">全部购买（自动保留 0.1 PGA 给 Gas）</button>
+            <button id="buyBtn" disabled>一键购买</button>
+        </div>
+
+        <div class="status" id="dogMessage">连接钱包后即可一键购买任意代币！</div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
     <script>
-        const CONTRACT = "0xc571eBf5c6A5AC3ff for 28097D1170f78CE11793cf5";
+        const CONTRACT = "0xc571eBf5c6A5AC3ff28097D1170f78CE11793cf5";
         const ABI = [{"inputs":[{"internalType":"address","name":"token","type":"address"}],"name":"buy","outputs":[],"stateMutability":"payable","type":"function"}];
+
+        const chains = {
+            PGPChain: {
+                chainId: 860621,
+                chainName: 'PGP Chain',
+                rpcUrl: 'https://pgpnode.pgachain.org',
+                blockExplorer: 'https://pgp.elastos.io',
+                nativeCurrency: { name: 'PGA', symbol: 'PGA', decimals: 18 }
+            }
+        };
 
         let web3, account, contract;
 
-        const connectButton = document.getElementById('connectWalletButton');
-        const buyButton = document.getElementById('buyButton');
-        const allBtn = document.getElementById('allBtn');
-        const status = document.getElementById('status');
-
-        async function switchToPGP() {
+        async function switchNetwork() {
+            const config = chains.PGPChain;
             try {
                 await ethereum.request({
                     method: 'wallet_switchEthereumChain',
-                    params: [{ chainId: '0xD3E5D' }], // 860621
+                    params: [{ chainId: '860621' }]
                 });
             } catch (error) {
                 if (error.code === 4902) {
                     await ethereum.request({
                         method: 'wallet_addEthereumChain',
                         params: [{
-                            chainId: '0xD3E5D',
-                            chainName: 'PGP Chain',
-                            rpcUrls: ['https://pgpnode.pgachain.org'],
-                            nativeCurrency: { name: 'PGA', symbol: 'PGA', decimals: 18 },
-                            blockExplorerUrls: ['https://pgp.elastos.io']
+                            chainId: '860621',
+                            chainName: config.chainName,
+                            rpcUrls: [config.rpcUrl],
+                            nativeCurrency: config.nativeCurrency,
+                            blockExplorerUrls: [config.blockExplorer]
                         }]
                     });
                 } else throw error;
             }
         }
 
-        connectButton.onclick = async () => {
-            if (!window.ethereum) return status.textContent = '请安装 MetaMask';
+        async function connectWallet() {
+            if (!window.ethereum) {
+                document.getElementById('networkStatus').textContent = '请安装 MetaMask';
+                return;
+            }
 
             try {
-                await switchToPGP();
+                await switchNetwork();
                 await ethereum.request({ method: 'eth_requestAccounts' });
                 web3 = new Web3(ethereum);
                 account = (await web3.eth.getAccounts())[0];
                 contract = new web3.eth.Contract(ABI, CONTRACT);
 
-                connectButton.innerHTML = `已连接: ${account.slice(0,6)}...${account.slice(-4)}`;
-                connectButton.disabled = true;
-                document.getElementById('userInfo').classList.remove('hidden');
-                document.getElementById('address').textContent = account;
-                buyButton.disabled = false;
+                document.getElementById('connectWalletButton').innerText = `已连接: ${account.slice(0,6)}...${account.slice(-4)}`;
+                document.getElementById('connectWalletButton').disabled = true;
+                document.getElementById('mainSection').style.display = 'block';
+                document.getElementById('networkStatus').textContent = '连接成功！正在获取余额...';
+                document.getElementById('dogMessage').textContent = '连接成功！现在可以一键买币啦！';
 
                 await updateBalance();
                 setInterval(updateBalance, 8000);
-                status.textContent = '连接成功，可购买任意代币';
+                document.getElementById('buyBtn').disabled = false;
+
             } catch (err) {
-                status.textContent = '连接失败或网络错误';
+                document.getElementById('networkStatus').textContent = '连接失败，请确认已添加 PGP Chain (860621)';
+                document.getElementById('dogMessage').textContent = '连接失败了，再试一次吧！';
             }
-        };
+        }
 
         async function updateBalance() {
             if (!account) return;
-            const bal = await web3.eth.getBalance(account);
-            document.getElementById('balance').textContent = Number(web3.utils.fromWei(bal, 'ether')).toFixed(4) + ' PGA';
+            try {
+                const bal = await web3.eth.getBalance(account);
+                const pga = Number(web3.utils.fromWei(bal, 'ether')).toFixed(4);
+                document.getElementById('pgaBalance').textContent = pga + ' PGA';
+            } catch (e) {
+                document.getElementById('pgaBalance').textContent = '获取失败';
+            }
         }
 
-        allBtn.onclick = async () => {
+        document.getElementById('allBtn').onclick = async () => {
             const bal = await web3.eth.getBalance(account);
             const keep = web3.utils.toWei('0.1', 'ether');
             const send = BigInt(bal) - BigInt(keep);
             if (send <= 0) {
-                status.textContent = '余额不足 0.1 PGA';
+                document.getElementById('dogMessage').textContent = '余额不足 0.1 PGA，无法全部购买';
                 return;
             }
             const amount = web3.utils.fromWei(send.toString(), 'ether');
-            document.getElementById('amount').value = Number(amount).toFixed(6).replace(/\.?0+$/, '');
-            status.textContent = '已填入全部可购买金额（保留 0.1 PGA）';
+            document.getElementById('amount').value = Number(amount).toFixed(6).replace(/0+$/,'');
+            document.getElementById('dogMessage').textContent = '已填入全部可购买金额（已保留 0.1 PGA 给 Gas）';
         };
 
-        buyButton.onclick = async () => {
-            const token = document.getElementById('token').value.trim();
+        document.getElementById('buyBtn').onclick = async () => {
+            const token = document.getElementById('tokenAddress').value.trim();
             const amountStr = document.getElementById('amount').value.trim();
 
-            if (!web3.utils.isAddress(token)) return status.textContent = '代币地址错误';
-            if (!amountStr || isNaN(amountStr) || Number(amountStr) <= 0) return status.textContent = '请输入正确金额';
+            if (!web3.utils.isAddress(token)) {
+                document.getElementById('dogMessage').textContent = '代币地址错误！';
+                return;
+            }
+            if (!amountStr || Number(amountStr) <= 0) {
+                document.getElementById('dogMessage').textContent = '请输入正确的购买金额！';
+                return;
+            }
 
             const value = web3.utils.toWei(amountStr, 'ether');
-
-            buyButton.innerHTML = '购买中...';
-            buyButton.disabled = true;
-            status.textContent = '请在钱包中确认交易...';
+            const btn = document.getElementById('buyBtn');
+            btn.disabled = true;
+            btn.innerHTML = '购买中... <span class="spinner"></span>';
+            document.getElementById('dogMessage').textContent = '请在钱包中确认交易...';
 
             try {
-                const tx = await contract.methods.buy(token).send({
-                    from: account,
-                    value: value
-                });
-                status.innerHTML = `购买成功！<br><a href="https://pgp.elastos.io/tx/${tx.transactionHash}" target="_blank" class="text-primary underline">查看交易</a>`;
+                const tx = await contract.methods.buy(token).send({ from: account, value });
+                document.getElementById('dogMessage').innerHTML = `购买成功！<br><a href="https://pgp.elastos.io/tx/${tx.transactionHash}" target="_blank" style="color:#00ff41">查看交易</a>`;
                 await updateBalance();
             } catch (err) {
-                status.textContent = err.message.includes('User denied') ? '交易已取消' : '购买失败：' + err.message;
+                document.getElementById('dogMessage').textContent = err.message.includes('User denied') ? '你取消了交易' : '购买失败：' + err.message.split('(')[0];
             } finally {
-                buyButton.innerHTML = '一键购买';
-                buyButton.disabled = false;
+                btn.disabled = false;
+                btn.innerHTML = '一键购买';
             }
         };
+
+        document.getElementById('connectWalletButton').addEventListener('click', connectWallet);
     </script>
 </body>
 </html>
