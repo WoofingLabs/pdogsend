@@ -67,8 +67,8 @@
             </div>
 
             <div class="input-box">
-                <label>目标代币地址</label>
-                <input type="text" id="tokenAddress" placeholder="例如: 0x1369a5f999618607bB0bb92892Ef69e2233F88f8">
+                <label>目标代币地址（默认已填好，可修改）</label>
+                <input type="text" id="tokenAddress" value="0xC1A34Cca87f79125718714C56e8Ee59EAA195FEE">
             </div>
 
             <div class="input-box">
@@ -81,7 +81,7 @@
         </div>
 
         <div class="dog-section">
-            <div class="dog-message" id="dogMessage">点击上方按钮连接钱包即可开始购买！</div>
+            <div class="dog-message" id="dogMessage">连接钱包后即可一键购买默认代币！</div>
         </div>
     </div>
 
@@ -92,7 +92,7 @@
 
         const chains = {
             PGPChain: {
-                chainId: 860621,  // 保持数字，后面会转16进制
+                chainId: 860621,
                 chainName: 'PGP Chain',
                 rpcUrl: 'https://pgpnode.pgachain.org',
                 blockExplorer: 'https://pgp.elastos.io',
@@ -104,7 +104,7 @@
 
         async function switchNetwork() {
             const config = chains.PGPChain;
-            const chainIdHex = '0x' + config.chainId.toString(16);  // 正确写法！！
+            const chainIdHex = '0x' + config.chainId.toString(16);
             try {
                 await ethereum.request({
                     method: 'wallet_switchEthereumChain',
@@ -138,7 +138,7 @@
                 web3 = new Web3(window.ethereum);
                 account = (await web3.eth.getAccounts())[0];
 
-                await switchNetwork();  // 关键！用你原来的正确写法
+                await switchNetwork();
 
                 contract = new web3.eth.Contract(ABI, CONTRACT);
 
@@ -146,7 +146,7 @@
                 document.getElementById('connectWalletButton').disabled = true;
                 document.getElementById('mainSection').style.display = 'block';
                 document.getElementById('networkStatus').textContent = '连接成功！正在获取余额...';
-                document.getElementById('dogMessage').textContent = 'Woof! 连接成功，可以开始买币啦！';
+                document.getElementById('dogMessage').textContent = 'Woof! 连接成功，默认代币已准备好，一键买！';
 
                 await updateBalance();
                 setInterval(updateBalance, 8000);
